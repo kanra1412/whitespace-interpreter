@@ -10,23 +10,32 @@ fs.readFile(f_path, (err, data) => {
 	if(err) {
 		throw new Error(err);
 	}
-	console.log(data.toString().length);
 	let str = convers(data);
 	console.log('[ source ]:', str,'\n[ length ]:',str.length);
 
-	get_op(str);
+	// str = 'ssstntntsssstsntntssssttntntsssstssntntsssststntntsssststntttssstssntttsssttntttssstsntttssstnttttnsstnsstnsstnsstnssnnn';
+	// var input = '12345\n';
+	new interpreter(str);
+});
+
+function interpreter(str, input) {console.log(this);
+	this.stack = [],
+	this.heap = {},
+	this.op_list = [],
+	this.label_list = [],
+	this.sub_list = [],
+	this.output = '';
+
+	get_op.call(this, str);
 	console.log('--------------------------------------------');
-	console.log('stack:',stack, '\nheap:', heap, '\nop_list:', op_list, '\nlabel_list:', label_list);
+	console.log('stack:',this.stack, '\nheap:', this.heap, '\nop_list:', this.op_list, '\nlabel_list:', this.label_list);
 	console.log('--------------------------------------------');
 
 	let i = 0;
-	exec_op(i, x => x < op_list.length);
+	exec_op.call(this, i, x => x < this.op_list.length);
 
-	console.log('[ output ]: ', output);
-});
-
-// global var
-var stack = [], heap = {}, op_list = [], label_list = [], sub_list = [], output = '';
+	console.log('[ output ]: ', this.output);
+}
 
 function get_op(str) {
 	if (str === '') {
@@ -60,14 +69,14 @@ function get_op(str) {
 			}
 			i++;
 
-			op_list.push([op[0], para]);
+			this.op_list.push([op[0], para]);
 			if (op[0] === 'def') {
-				func_map[op[0]](para);
+				func_map[op[0]].call(this, para);
 			}
 		}
 		// no parameter
 		else {
-			op_list.push(op[0]);
+			this.op_list.push(op[0]);
 		}
 		// console.log(i);
 	}
@@ -86,20 +95,42 @@ function convers(data) {
 	return data.toString().replace(/[^\n\t ]/g, '').replace(/\t/g, 't').replace(/\n/g, 'n').replace(/\r/g, '').replace(/ /g, 's');
 }
 
+function get_stdin() {
+	process.stdin.setEncoding('utf8');
+	let input = '';
+	process.stdin.on('readable', () => {
+		var chunk = process.stdin.read();
+		if (chunk !== null) {
+			input += chunk;
+		}
+		else {
+			process.stdin.emit('end');
+		}
+	});
+
+	process.stdin.on('end', () => {
+		return input;
+	});
+}
+
 function exec_op(i, flag) {
 	if (typeof flag === 'function') {
-		while(flag(i)) {
-			if (typeof op_list[i] !== 'object') {
-				if (op_list[i] === 'output_num' || op_list[i] === 'output_char') {
-					output += func_map[op_list[i]]();
+		while(flag(i)) { console.log(this.op_list[i]);
+			if (typeof this.op_list[i] !== 'object') {
+				if (this.op_list[i] === 'output_num' || this.op_list[i] === 'output_char') {
+					this.output += func_map[this.op_list[i]].call(this);
+				}
+				else if (this.op_list[i] === 'input_num' || this.op_list[i] === 'input_char') {
+					// let input = get_stdin();
+					func_map[this.op_list[i]].call(this);
 				}
 				else {
-					func_map[op_list[i]]();
+					func_map[this.op_list[i]].call(this);
 				}
 			}
 			else {
-				if (op_list[i][0] !== 'def') {
-					func_map[op_list[i][0]](op_list[i][1]);
+				if (this.op_list[i][0] !== 'def') {
+					func_map[this.op_list[i][0]].call(this, this.op_list[i][1]);
 				}
 			}
 			i++;
@@ -111,7 +142,7 @@ function exec_op(i, flag) {
 }
 
 function is_stack_empty() {
-	if (stack.length < 1) {
+	if (this.stack.length < 1) {
 		err('stack empty');
 	}
 }
@@ -122,124 +153,137 @@ function err(msg) {
 
 var func_map = {
 	// I/O
-	output_char: () => {
-		is_stack_empty();
-		return String.fromCharCode(stack.pop());
+	output_char: function() {
+		is_stack_empty.call(this);
+		return String.fromCharCode(this.stack.pop());
 	},
-	output_num: () => {
-		is_stack_empty();
-		let num = stack.pop();
+	output_num: function() {
+		is_stack_empty.call(this);
+		let num = this.stack.pop();
 		return isNaN(num)? 0: num;
 	},
-	input_char: (x) => {
-		is_stack_empty();
-		heap[stack[stack.length-1]] = x;
+	input_char: function() {
+		is_stack_empty.call(this);
+		if (input !== '') {
+			input = input.split('');
+			heap[this.stack[this.stack.length-1]] = input.shift().charCodeAt(0);
+			input = input.join('');
+		}
+		else {
+			err('no input');
+		}
 	},
-	input_num: (x) => {
-		is_stack_empty();
-		heap[stack[stack.length-1]] = x;
+	input_num: function() {
+		is_stack_empty.call(this);
+		if (input !== '') {
+			input = input.split('\n');
+			heap[this.stack[this.stack.length-1]] = input.shift();
+			input = input.join('\n');
+		}
+		else {
+			err('no input');
+		}
 	},
 
 	// stack
-	push: (x) => {
+	push: function(x) {
 		if (!isNaN(x)) {
-			stack.push(x);
+			this.stack.push(x);
 		}
 		else {
-			stack.push(0);
+			this.stack.push(0);
 		}
 	},
-	copy: (x) => {
+	copy: function(x) {
 		if (x < 0) {
 			err('index out range');
 		}
-		if (stack.length > x) {
-			stack.push(stack[stack.length - 1 - x]);
+		if (this.stack.length > x) {
+			this.stack.push(this.stack[this.stack.length - 1 - x]);
 		}
 		else {
 			err('stack empty');
 		}
 	},
-	remove: (x) => {
-		if (x < 0 || x > stack.length - 1) {
-			stack = [stack.pop()];
+	remove: function(x) {
+		if (x < 0 || x > this.stack.length - 1) {
+			stack = [this.stack.pop()];
 		}
 		else {
-			stack.splice(stack.length -1 - x, x);
+			this.stack.splice(this.stack.length -1 - x, x);
 		}
 	},
-	copy_top: () => {
-		is_stack_empty();
-		stack.push(stack[stack.length-1]);
+	copy_top: function() {
+		is_stack_empty.call(this);
+		this.stack.push(this.stack[this.stack.length-1]);
 	},
-	change: () => {
-		is_stack_empty();
-		let t = stack[stack.length-2];
-		stack[stack.length-2] = stack.pop();
-		stack.push(t);
+	change: function() {
+		is_stack_empty.call(this);
+		let t = stack[this.stack.length-2];
+		stack[this.stack.length-2] = this.stack.pop();
+		this.stack.push(t);
 	},
-	rm_top: () => {
-		is_stack_empty();
-		stack.pop();
+	rm_top: function() {
+		is_stack_empty.call(this);
+		this.stack.pop();
 	},
 
 	// ctrl
-	end: () => {
-		// console.log('stack:',stack, '\nheap:', heap, '\nop_list:', op_list, '\nlabel_list:', label_list);
-		stack = [];
-		heap = {};
-		op_list = [];
-		label_list = [];
+	end: function() {
+		this.stack = [];
+		this.heap = {};
+		this.op_list = [];
+		this.label_list = [];
 	},
-	def: (x) => {
-		if (label_list.filter(i => isNaN(x)?isNaN(i[0]): i[0] === x).length !== 0) {
+	def: function(x) {
+		if (this.label_list.filter(i => isNaN(x)?isNaN(i[0]): i[0] === x).length !== 0) {
 			err('label already def');
 		}
-		label_list.push([x, op_list.length-1]);
+		this.label_list.push([x, this.op_list.length-1]);
 	},
-	call: (x) => {
-		let target = label_list.filter(i => isNaN(x)?isNaN(i[0]): i[0] === x);
+	call: function(x) {
+		let target = this.label_list.filter(i => isNaN(x)?isNaN(i[0]): i[0] === x);
 		if (target.length !== 0) {
-			let context = op_list.filter(i => i==='object' && i[0]==='call');
-			sub_list.push([x, op_list.indexOf(context)]);
+			let context = this.op_list.filter(i => i==='object' && i[0]==='call');
+			sub_list.push([x, this.op_list.indexOf(context)]);
 
 			let index = target[0][1]+1;
-			exec_op(index, (x) => {
-				if (x === op_list.length - 1 && op_list[x] !== 'end') {
+			exec_op.call(this, index, (x) => {
+				if (x === this.op_list.length - 1 && this.op_list[x] !== 'end') {
 					err('return not exists');
 				}
-				return op_list[x] !== 'ret' && x < op_list.length;
+				return this.op_list[x] !== 'ret' && x < this.op_list.length;
 			});
 		}
 		else {
 			err('unknown sub');
 		}
 	},
-	jump: (x) => {
-		let target = label_list.filter(i => isNaN(x)?isNaN(i[0]): i[0] === x);
+	jump: function(x) {
+		let target = this.label_list.filter(i => isNaN(x)?isNaN(i[0]): i[0] === x);
 		if (target.length !== 0) {
 			let index = target[0][1]+1;
-			exec_op(index, x => x < op_list.length);
+			exec_op.call(this, index, x => x < this.op_list.length);
 		}
 		else {
 			err('label not def');
 		}
 	},
-	jump_zero: (x) => {
-		is_stack_empty();
-		if (stack.pop() === 0) {
-			func_map['jump'](x);
+	jump_zero: function(x) {
+		is_stack_empty.call(this);
+		if (this.stack.pop() === 0) {
+			func_map['jump'].call(this, x);
 		}
 	},
-	jump_nagative: (x) => {
-		is_stack_empty();
-		if (stack.pop() < 0) {
-			func_map['jump'](x);
+	jump_nagative: function(x) {
+		is_stack_empty.call(this);
+		if (this.stack.pop() < 0) {
+			func_map['jump'].call(this, x);
 		}
 	},
-	ret: () => {
+	ret: function() {
 		if (sub_list.length > 0) {
-			func_map[sub_list.pop()];
+			func_map[sub_list.pop()].call(this);
 		}
 		else {
 			err('sub return err');
@@ -247,15 +291,15 @@ var func_map = {
 	},
 
 	// heap
-	save: () => {
-		is_stack_empty();
-		heap[stack[stack.length-2]] = stack.pop();
-		stack.pop();
+	save: function() {
+		is_stack_empty.call(this);
+		heap[this.stack[this.stack.length-2]] = this.stack.pop();
+		this.stack.pop();
 	},
-	load: () => {
-		is_stack_empty();
-		if (heap[stack[stack.length-1]] !== undefined) {
-			stack.push(heap[stack.pop()]);
+	load: function() {
+		is_stack_empty.call(this); console.log(heap);
+		if (heap.hasOwnProperty(this.stack[this.stack.length-1])) {
+			this.stack.push(heap[this.stack.pop()]);
 		}
 		else {
 			err('addr error');
@@ -263,64 +307,53 @@ var func_map = {
 	},
 
 	// math
-	add: () => {
-		if (stack.length < 2) {
+	add: function() {
+		if (this.stack.length < 2) {
 			err('stack val err');
 		}
 		else {
-			stack.push(stack.pop() + stack.pop());
+			this.stack.push(this.stack.pop() + this.stack.pop());
 		}
 	},
-	multi: () => {
-		if (stack.length < 2) {
+	multi: function() {
+		if (this.stack.length < 2) {
 			err('stack val err');
 		}
 		else {
-			stack.push(stack.pop() * stack.pop());
+			this.stack.push(this.stack.pop() * this.stack.pop());
 		}
 	},
-	minus: () => {
-		if (stack.length < 2) {
+	minus: function() {
+		if (this.stack.length < 2) {
 			err('stack val err');
 		}
 		else {
-			stack.push(0 - stack.pop() + stack.pop());
+			this.stack.push(0 - this.stack.pop() + this.stack.pop());
 		}
 	},
-	divide: () => {
-		if (stack.length < 2) {
+	divide: function() {
+		if (this.stack.length < 2) {
 			err('stack val err');
 		}
 		else {
-			let argu1 = stack.pop(), argu2 = stack.pop();
+			let argu1 = this.stack.pop(), argu2 = this.stack.pop();
 			if (argu1 === 0) {
 				err('divisor err');
 			}
-			stack.push(Math.floor(argu2 / argu1));
+			this.stack.push(Math.floor(argu2 / argu1));
 		}
 	},
-	mod: () => {
-		if (stack.length < 2) {
+	mod: function() {
+		if (this.stack.length < 2) {
 			err('stack val err');
 		}
 		else {
-			let argu1 = stack.pop(), argu2 = stack.pop();
+			let argu1 = this.stack.pop(), argu2 = this.stack.pop();
 			if (argu1 === 0) {
 				err('modulo by zero');
 			}
 			else {
-				if (argu1 * argu2 < 0) {
-					let re = (argu2 % argu1) === 0? 0: (Math.abs(argu1) * (~~(Math.abs(argu2 / argu1)) + 1) - Math.abs(argu2));
-					if (argu1 < 0) {
-						stack.push(0-re);
-					}
-					else {
-						stack.push(re);
-					}
-				}
-				else {
-					stack.push(argu2 % argu1);
-				}
+				stack.push((argu1 % argu2 + argu2) % argu2);
 			}
 		}
 	}
@@ -349,8 +382,8 @@ var map = {
 				't': ['output_num', 0]
 			},
 			't': {
-				's': ['input_char', 1],
-				't': ['input_num', 1]
+				's': ['input_char', 0],
+				't': ['input_num', 0]
 			}
 		},
 		't': {
@@ -384,60 +417,3 @@ var map = {
 };
 
 var label_func = ['push', 'remove', 'copy', 'input_num'];
-
-// var map = {
-// 	'\n': {
-// 		' ': {
-// 			' ': ['def', 1],
-// 			'\t': ['call', 1],
-// 			'\n': ['jump', 1]
-// 		},
-// 		'\t': {
-// 			' ': ['jump_zero', 1],
-// 			'\t': ['jump_nagative', 1],
-// 			'\n': ['ret', 0]
-// 		},
-// 		'\n': {
-// 			'\n': ['end', 0]
-// 		}
-// 	},
-// 	'\t': {
-// 		'\n': {
-// 			' ': {
-// 				' ': ['output_char', 0],
-// 				'\t': ['output_num', 0]
-// 			},
-// 			'\t': {
-// 				' ': ['input_char', 1],
-// 				'\t': ['input_num', 1]
-// 			}
-// 		},
-// 		'\t': {
-// 			' ': ['save', 1],
-// 			'\t': ['load', 0]
-// 		},
-// 		' ': {
-// 			' ': {
-// 				' ': ['add', 0],
-// 				'\n': ['multi', 0],
-// 				'\t': ['minus', 0]
-// 			},
-// 			'\t': {
-// 				' ': ['divide', 0],
-// 				'\t': ['mod', 0]
-// 			}
-// 		}
-// 	},
-// 	' ': {
-// 		' ': ['push', 1],
-// 		'\t': {
-// 			' ': ['copy', 1],
-// 			'\n': ['remove', 1]
-// 		},
-// 		'\n': {
-// 			' ': ['copy_top', 0],
-// 			'\t': ['change', 0],
-// 			'\n': ['rm_top', 0]
-// 		}
-// 	}
-// };
